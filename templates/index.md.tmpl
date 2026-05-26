@@ -1,0 +1,20 @@
+---
+page_title: "{{.ProviderShortName}} Provider"
+subcategory: ""
+description: |-
+  The gcxtras provider enables management of Genesys Cloud Speech and Text Analytics resources.
+---
+
+# {{.ProviderShortName}} Provider
+
+The `gcxtras` provider enables management of Genesys Cloud Speech and Text Analytics (STA) resources including programs and topics. It is designed to be used alongside the official `mypurecloud/genesyscloud` provider, filling gaps in STA resource management.
+
+## Authentication
+
+The provider authenticates using OAuth2 client credentials. You can configure credentials directly in the provider block or via environment variables (`GENESYSCLOUD_OAUTHCLIENT_ID`, `GENESYSCLOUD_OAUTHCLIENT_SECRET`, `GENESYSCLOUD_REGION`).
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Example Usage
+
+{{tffile "examples/provider/provider.tf"}}
