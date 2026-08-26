@@ -2,12 +2,17 @@
 page_title: "gcxtras Provider"
 subcategory: ""
 description: |-
-  The gcxtras provider enables management of Genesys Cloud Speech and Text Analytics resources.
+  An unofficial companion provider for Genesys Cloud, covering resources not yet supported by the official provider.
 ---
 
 # gcxtras Provider
 
-The `gcxtras` provider enables management of Genesys Cloud Speech and Text Analytics (STA) resources including programs and topics. It is designed to be used alongside the official `mypurecloud/genesyscloud` provider, filling gaps in STA resource management.
+The `gcxtras` provider is an unofficial, community-maintained companion to the official [`mypurecloud/genesyscloud`](https://registry.terraform.io/providers/mypurecloud/genesyscloud) Terraform provider. Its purpose is to manage Genesys Cloud resources that are either:
+
+- **Not yet supported** by the official provider
+- **Better managed differently** from how the official provider handles them
+
+This provider is not affiliated with or endorsed by Genesys. It uses the same public APIs and authentication mechanisms as the official provider and is designed to be used alongside it.
 
 ## Authentication
 
