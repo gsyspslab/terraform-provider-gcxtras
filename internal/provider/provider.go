@@ -7,6 +7,7 @@ import (
 	"github.com/ara/terraform-provider-genesyscloud-ara-extras/internal/client"
 	ds_sta_program "github.com/ara/terraform-provider-genesyscloud-ara-extras/internal/datasources/sta_program"
 	ds_sta_topic "github.com/ara/terraform-provider-genesyscloud-ara-extras/internal/datasources/sta_topic"
+	"github.com/ara/terraform-provider-genesyscloud-ara-extras/internal/resources/processautomation_scheduled_trigger"
 	"github.com/ara/terraform-provider-genesyscloud-ara-extras/internal/resources/sta_program"
 	"github.com/ara/terraform-provider-genesyscloud-ara-extras/internal/resources/sta_topic"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
@@ -46,8 +47,9 @@ func New() *schema.Provider {
 			},
 		},
 		ResourcesMap: map[string]*schema.Resource{
-			"gcxtras_sta_program": sta_program.Resource(),
-			"gcxtras_sta_topic":   sta_topic.Resource(),
+			"gcxtras_sta_program":                          sta_program.Resource(),
+			"gcxtras_sta_topic":                            sta_topic.Resource(),
+			"gcxtras_processautomation_scheduled_trigger":  processautomation_scheduled_trigger.Resource(),
 		},
 		DataSourcesMap: map[string]*schema.Resource{
 			"gcxtras_sta_topic":   ds_sta_topic.DataSource(),

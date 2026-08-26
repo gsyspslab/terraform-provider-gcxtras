@@ -10,13 +10,14 @@ Published by [gsyspslab](https://gsyspslab.com).
 |----------|-------------|
 | `gcxtras_sta_program` | Speech and Text Analytics Program (full CRUD) |
 | `gcxtras_sta_topic` | Speech and Text Analytics Topic (full CRUD) |
+| `gcxtras_processautomation_scheduled_trigger` | Process Automation Scheduled Trigger (full CRUD) |
 
 ## Supported Data Sources
 
 | Data Source | Description |
 |-------------|-------------|
 | `gcxtras_sta_program` | Look up an existing STA Program by name |
-| `gcxtras_sta_topic` | Look up an existing STA Topic by name |
+| `gcxtras_sta_topic` | Look up an existing STA Topic by name and dialect |
 
 ## Authentication
 
@@ -29,6 +30,7 @@ provider "gcxtras" {
   oauthclient_id     = "your-client-id"
   oauthclient_secret = "your-client-secret"
   aws_region         = "eu-west-1"
+  sdk_debug          = true  # optional: logs API calls to gcxtras_debug.log
 }
 ```
 
@@ -40,13 +42,6 @@ provider "gcxtras" {
 | `GENESYSCLOUD_OAUTHCLIENT_SECRET` | OAuth Client Secret |
 | `GENESYSCLOUD_REGION` | AWS Region (e.g. `eu-west-1`) |
 
-## Building
-
-```bash
-make build    # Build the binary
-make install  # Install to local Terraform plugin directory
-```
-
 ## Usage
 
 ```hcl
@@ -54,45 +49,128 @@ terraform {
   required_providers {
     gcxtras = {
       source  = "gsyspslab/gcxtras"
-      version = "0.1.0"
+      version = "~> 0.1"
     }
   }
-}
-
-resource "gcxtras_sta_program" "example" {
-  name        = "My Analytics Program"
-  description = "Managed by Terraform"
-  published   = false
-  tags        = ["terraform"]
 }
 
 resource "gcxtras_sta_topic" "cancellation" {
   name         = "Account Cancellation"
   description  = "Detects cancellation intent"
-  dialect      = "en-US"
+  dialect      = "en-GB"
   strictness   = "72"
   participants = "External"
-
-  phrases {
-    text = "I want to cancel my account"
-  }
-  phrases {
-    text = "close out my account"
-  }
-
-  program_ids = [gcxtras_sta_program.example.id]
-  tags        = ["churn"]
-}
-
-# Reference existing resources
-data "gcxtras_sta_program" "default" {
-  name = "Default Program"
+  tags         = ["churn"]
 }
 
 data "gcxtras_sta_topic" "billing" {
-  name = "Billing Inquiry"
+  name    = "Billing Inquiry"
+  dialect = "en-GB"
+}
+
+resource "gcxtras_sta_program" "example" {
+  name        = "My Analytics Program"
+  description = "Managed by Terraform"
+  published   = true
+  tags        = ["terraform"]
+  topic_ids = [
+    gcxtras_sta_topic.cancellation.id,
+    data.gcxtras_sta_topic.billing.id,
+  ]
+}
+
+data "gcxtras_sta_program" "default" {
+  name = "General"
 }
 ```
+
+## Development
+
+### Building
+
+```bash
+make build    # Build the binary
+make install  # Install to local Terraform plugin directory
+```
+
+After `make install`, run `terraform init -upgrade` in your Terraform project to pick up the new binary.
+
+### Regenerating Documentation
+
+Documentation is auto-generated from schema descriptions using `tfplugindocs`:
+
+```bash
+# Install (one-time)
+go install github.com/hashicorp/terraform-plugin-docs/cmd/tfplugindocs@latest
+
+# Generate (run from project root)
+~/go/bin/tfplugindocs generate --provider-name gcxtras
+```
+
+This reads the schema `Description` fields and example files from `examples/` to produce the `docs/` directory. The Terraform Registry renders these automatically.
+
+### Project Structure for Documentation
+
+`tfplugindocs` expects examples in this layout:
+
+```
+examples/
+  provider/provider.tf
+  resources/gcxtras_sta_program/resource.tf
+  resources/gcxtras_sta_topic/resource.tf
+  data-sources/gcxtras_sta_program/data-source.tf
+  data-sources/gcxtras_sta_topic/data-source.tf
+templates/
+  index.md.tmpl              # custom provider page template
+docs/                        # generated output (commit this)
+```
+
+## Release Process
+
+Releases are published to the [Terraform Registry](https://registry.terraform.io/providers/gsyspslab/gcxtras) via GitHub Actions.
+
+### Steps to release a new version:
+
+```bash
+# 1. Make your changes and commit
+git add .
+git commit -m "Description of changes"
+git push origin main
+
+# 2. Tag with a semver version
+git tag v0.1.1
+git push origin v0.1.1
+```
+
+Pushing the tag triggers the `.github/workflows/release.yml` workflow which:
+1. Builds binaries for linux/darwin/windows (amd64 + arm64)
+2. Signs the SHA256SUMS file with the GPG key
+3. Creates a GitHub Release with all artifacts
+4. The Terraform Registry webhook detects the release and publishes it
+
+### GitHub Secrets Required
+
+| Secret | Description |
+|--------|-------------|
+| `GPG_PRIVATE_KEY` | ASCII-armored GPG private key (`gpg --armor --export-secret-keys gsyspslab`) |
+
+### GPG Key Management
+
+The release artifacts are signed with a GPG key. The public key must be registered in:
+- **Terraform Registry** — User Settings → Signing Keys
+- **GitHub** — Account Settings → SSH and GPG keys (for verified tag signatures)
+
+```bash
+# Export public key (for registry/GitHub)
+gpg --armor --export gsyspslab
+
+# Export private key (for GitHub Actions secret)
+gpg --armor --export-secret-keys gsyspslab
+```
+
+### GoReleaser
+
+The `.goreleaser.yml` config handles cross-compilation and release artifact creation. It also includes the `terraform-registry-manifest.json` file in the release, which tells the registry the provider uses protocol version 5.0.
 
 ## Resource: gcxtras_sta_program
 
@@ -153,6 +231,72 @@ terraform import gcxtras_sta_program.example <program-id>
 terraform import gcxtras_sta_topic.example <topic-id>
 ```
 
+## Resource: gcxtras_processautomation_scheduled_trigger
+
+Manages a Genesys Cloud Process Automation Scheduled Trigger. These triggers invoke Architect workflows on a cron-based schedule. The official Genesys Cloud provider only supports event-based triggers — this resource fills that gap.
+
+### Arguments
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `name` | string | yes | The name of the trigger (max 162 characters) |
+| `description` | string | no | The description (max 512 characters) |
+| `enabled` | bool | no | Whether the trigger is enabled (default: true) |
+| `target` | block | yes | The workflow target (see below) |
+| `schedule` | block | yes | The cron-based schedule (see below) |
+
+#### Target Block
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `id` | string | yes | The ID of the Architect workflow to invoke |
+| `type` | string | yes | Must be `Workflow` |
+
+#### Schedule Block
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `minutes` | list(number) | yes | Minutes at which the trigger runs (0-59). Max 2 values per hour. |
+| `hours` | list(number) | yes | Hours at which the trigger runs (0-23). Empty list means every hour. |
+| `days_of_month` | list(number) | no | Days of the month (1-31). Omit for every day. |
+| `months` | list(number) | no | Months (1-12). Omit for every month. |
+| `days_of_week` | list(number) | no | Days of the week (1-7, Sunday=1). Omit for every day. |
+| `timezone` | string | yes | Timezone (e.g. `Europe/London`, `America/New_York`, `UTC`) |
+
+### Attributes
+
+| Name | Type | Description |
+|------|------|-------------|
+| `id` | string | The scheduled trigger ID |
+
+### Example Usage
+
+```hcl
+resource "gcxtras_processautomation_scheduled_trigger" "daily_report" {
+  name        = "Daily Report Generator"
+  description = "Runs every weekday at 9:00 AM London time"
+  enabled     = true
+
+  target {
+    id   = "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+    type = "Workflow"
+  }
+
+  schedule {
+    minutes      = [0]
+    hours        = [9]
+    days_of_week = [2, 3, 4, 5, 6]
+    timezone     = "Europe/London"
+  }
+}
+```
+
+### Import
+
+```bash
+terraform import gcxtras_processautomation_scheduled_trigger.example <trigger-id>
+```
+
 ## Data Source: gcxtras_sta_program
 
 Looks up an existing Speech and Text Analytics Program by name.
@@ -176,13 +320,15 @@ Looks up an existing Speech and Text Analytics Program by name.
 
 ## Data Source: gcxtras_sta_topic
 
-Looks up an existing Speech and Text Analytics Topic by name.
+Looks up an existing Speech and Text Analytics Topic by name and dialect.
 
 ### Arguments
 
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
 | `name` | string | yes | The exact name of the topic to look up |
+| `dialect` | string | yes | The dialect (e.g. en-GB). Required to disambiguate topics with the same name. |
+| `state` | string | no | Which version to retrieve: `latest` or `published` (default: `latest`) |
 
 ### Attributes
 
